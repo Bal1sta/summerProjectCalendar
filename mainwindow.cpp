@@ -39,6 +39,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
     )");
 
+
     list = new QListWidget(this);
     list->setStyleSheet(R"(
     QListWidget {
@@ -62,6 +63,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     fillHoursList();
     highlightCurrentDate();  // Подсвечиваем текущую дату сразу при запуске
+    highlightDatesWithNotes(); // Подсвечиваем даты с заметками (если есть)
 
     connect(calendar, &QCalendarWidget::selectionChanged, this, &MainWindow::onDateChanged);
     connect(list, &QListWidget::itemDoubleClicked, this, &MainWindow::onHourDoubleClicked);
@@ -90,6 +92,26 @@ void MainWindow::highlightCurrentDate()
 
     QDate today = QDate::currentDate();
     calendar->setDateTextFormat(today, format);
+}
+
+void MainWindow::highlightDatesWithNotes()
+{
+    // Сбрасываем формат для всех дат
+    calendar->setDateTextFormat(QDate(), QTextCharFormat());
+
+    // Снова подсвечиваем текущую дату, чтобы не потерять выделение
+    highlightCurrentDate();
+
+    // Формат для дат с заметками
+    QTextCharFormat noteFormat;
+    noteFormat.setBackground(QBrush(QColor(QColorConstants::DarkGray)));
+    noteFormat.setForeground(QBrush(Qt::black));
+
+    for (const QDate& date : notes.keys()) {
+        if (!notes[date].isEmpty()) {
+            calendar->setDateTextFormat(date, noteFormat);
+        }
+    }
 }
 
 void MainWindow::onDateChanged()
@@ -140,5 +162,6 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
             notes[selectedDate][hour] = text;
             item->setText(QString("%1:00 - %2").arg(hour, 2, 10, QChar('0')).arg(text));
         }
+        highlightDatesWithNotes(); // Обновляем подсветку дат с заметками
     }
 }
