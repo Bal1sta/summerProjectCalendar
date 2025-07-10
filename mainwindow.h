@@ -36,6 +36,7 @@ private:
 
     void fillHoursList();
     void highlightCurrentDate();  // Метод для подсветки текущей даты
+    void highlightDatesWithNotes(); // Метод для подсветки дат с заметками
 
 private slots:
     void onDateChanged();
