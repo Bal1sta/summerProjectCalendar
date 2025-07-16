@@ -12,7 +12,35 @@
 #include <QUrl>
 #include <QDir>
 #include <QApplication>
+#include <QSettings>
+#include <QMenuBar>
+#include <QPalette>
 
+// ---- Палитры для темы ----
+void applyDarkPalette(QApplication &app) {
+    app.setStyle("Fusion");
+    QPalette darkPalette;
+    darkPalette.setColor(QPalette::Window, QColor(53,53,53));
+    darkPalette.setColor(QPalette::WindowText, Qt::white);
+    darkPalette.setColor(QPalette::Base, QColor(25,25,25));
+    darkPalette.setColor(QPalette::AlternateBase, QColor(53,53,53));
+    darkPalette.setColor(QPalette::ToolTipBase, Qt::black);
+    darkPalette.setColor(QPalette::ToolTipText, Qt::white);
+    darkPalette.setColor(QPalette::Text, Qt::white);
+    darkPalette.setColor(QPalette::Button, QColor(53,53,53));
+    darkPalette.setColor(QPalette::ButtonText, Qt::white);
+    darkPalette.setColor(QPalette::BrightText, Qt::red);
+    darkPalette.setColor(QPalette::Highlight, QColor(42,130,218));
+    darkPalette.setColor(QPalette::HighlightedText, Qt::black);
+    app.setPalette(darkPalette);
+}
+
+void applyLightPalette(QApplication &app) {
+    app.setStyle("Fusion");
+    app.setPalette(app.style()->standardPalette());
+}
+
+// -------------------------
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,25 +51,25 @@ MainWindow::MainWindow(QWidget *parent)
 
     calendar = new QCalendarWidget(this);
     calendar->setStyleSheet(R"(
-    QCalendarWidget QWidget { background-color: #232629; color: #f0f0f0; }
-    QCalendarWidget QAbstractItemView { background-color: #232629; color: #f0f0f0; selection-background-color: #3d4250; selection-color: #ffffff; }
-    QCalendarWidget QToolButton { background-color: #232629; color: #f0f0f0; }
-    QCalendarWidget QSpinBox { background-color: #232629; color: #f0f0f0; }
-    QCalendarWidget QMenu { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QWidget { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QAbstractItemView { background-color: #232629; color: #f0f0f0; selection-background-color: #3d4250; selection-color: #ffffff; }
+        QCalendarWidget QToolButton { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QSpinBox { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QMenu { background-color: #232629; color: #f0f0f0; }
     )");
 
     list = new QListWidget(this);
     list->setStyleSheet(R"(
-    QListWidget { background-color: #232629; color: #f0f0f0; border: 1px solid #3d4250; }
-    QListWidget::item { background-color: #232629; color: #f0f0f0; }
-    QListWidget::item:selected { background-color: #3d4250; color: #ffffff; }
+        QListWidget { background-color: #232629; color: #f0f0f0; border: 1px solid #3d4250; }
+        QListWidget::item { background-color: #232629; color: #f0f0f0; }
+        QListWidget::item:selected { background-color: #3d4250; color: #ffffff; }
     )");
 
     QHBoxLayout* layout = new QHBoxLayout(centralWidget);
     layout->addWidget(calendar);
     layout->addWidget(list);
 
-    // --- Указываем полный путь к базе данных ---
+    // --- Путь к БД ---
     QString folderPath = R"(C:\_LABY_\4-Semestr\Proga_2\summerProject\summerProject)";
     QDir dir(folderPath);
     if (!dir.exists()) {
@@ -61,11 +89,14 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     QSqlQuery query;
-    query.exec("CREATE TABLE IF NOT EXISTS notes ("
-               "date TEXT,"
-               "hour INTEGER,"
-               "note TEXT,"
-               "PRIMARY KEY(date, hour))");
+    if(!query.exec("CREATE TABLE IF NOT EXISTS notes ("
+                    "date TEXT,"
+                    "hour INTEGER,"
+                    "note TEXT,"
+                    "PRIMARY KEY(date, hour))")) {
+        QMessageBox::critical(this, "Ошибка SQL", query.lastError().text());
+        return;
+    }
 
     fillHoursList();
     highlightCurrentDate();
@@ -84,19 +115,27 @@ MainWindow::MainWindow(QWidget *parent)
 
     scheduleNotifications();
 
-    // //*************************************
-    // setupTrayIcon();
-
-    // notificationSound.setSource(QUrl("qrc:/sounds/sounds/archivo.wav"));
-    // notificationSound.setVolume(0.5f);
-
-    // scheduleNotifications();
-
-    // // Запускаем тестовое уведомление через 1 секунду после старта
-    // QTimer::singleShot(1000, this, &MainWindow::testNotification);
-    // //*************************************
-
     QApplication::setWindowIcon(QIcon(":/icons/icons/calendar_32x32.png"));
+
+    // Меню темы
+    viewMenu = menuBar()->addMenu(tr("Вид"));
+
+    themeActionGroup = new QActionGroup(this);
+    lightThemeAction = new QAction(tr("Светлая"), this);
+    lightThemeAction->setCheckable(true);
+
+    darkThemeAction = new QAction(tr("Тёмная"), this);
+    darkThemeAction->setCheckable(true);
+
+    themeActionGroup->addAction(lightThemeAction);
+    themeActionGroup->addAction(darkThemeAction);
+
+    viewMenu->addAction(lightThemeAction);
+    viewMenu->addAction(darkThemeAction);
+
+    connect(themeActionGroup, &QActionGroup::triggered, this, &MainWindow::changeTheme);
+
+    loadSavedTheme();
 }
 
 MainWindow::~MainWindow()
@@ -116,8 +155,15 @@ void MainWindow::fillHoursList()
 void MainWindow::highlightCurrentDate()
 {
     QTextCharFormat format;
-    format.setBackground(QBrush(QColor(0, 122, 204))); // синий фон
-    format.setForeground(QBrush(Qt::black));
+
+    if (m_isDarkTheme) {
+        format.setBackground(QBrush(QColor(0, 122, 204))); // синий фон
+        format.setForeground(QBrush(Qt::black));
+    } else {
+        format.setBackground(QBrush(QColor(0, 122, 204)));
+        format.setForeground(QBrush(Qt::white));
+    }
+
     QDate today = QDate::currentDate();
     calendar->setDateTextFormat(today, format);
 }
@@ -128,8 +174,13 @@ void MainWindow::highlightDatesWithNotes()
     highlightCurrentDate();
 
     QTextCharFormat noteFormat;
-    noteFormat.setBackground(QBrush(QColor(Qt::darkGray)));
-    noteFormat.setForeground(QBrush(Qt::black));
+    if (m_isDarkTheme) {
+        noteFormat.setBackground(QBrush(QColor(Qt::darkGray)));
+        noteFormat.setForeground(QBrush(Qt::black));
+    } else {
+        noteFormat.setBackground(QBrush(QColor(Qt::lightGray)));
+        noteFormat.setForeground(QBrush(Qt::black));
+    }
 
     QSqlQuery query("SELECT DISTINCT date FROM notes");
     while (query.next()) {
@@ -161,7 +212,9 @@ void MainWindow::saveNote(const QDate& date, int hour, const QString& text)
     query.addBindValue(date.toString(Qt::ISODate));
     query.addBindValue(hour);
     query.addBindValue(text);
-    query.exec();
+    if (!query.exec()){
+        qDebug() << "Ошибка сохранения заметки:" << query.lastError().text();
+    }
 }
 
 void MainWindow::deleteNote(const QDate& date, int hour)
@@ -170,7 +223,9 @@ void MainWindow::deleteNote(const QDate& date, int hour)
     query.prepare("DELETE FROM notes WHERE date = ? AND hour = ?");
     query.addBindValue(date.toString(Qt::ISODate));
     query.addBindValue(hour);
-    query.exec();
+    if (!query.exec()){
+        qDebug() << "Ошибка удаления заметки:" << query.lastError().text();
+    }
 }
 
 void MainWindow::onDateChanged()
@@ -293,20 +348,91 @@ void MainWindow::showNotification()
         notificationSound.play();
 }
 
-// //*****************************************
-// void MainWindow::testNotification()
-// {
-//     QString title = "Тестовое уведомление";
-//     QString message = "Это проверка уведомления со звуком.";
-
-//     trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 10000);
-
-//     if (notificationSound.isLoaded())
-//         notificationSound.play();
-// }
-// //*****************************************
-
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     event->accept();
+}
+
+void MainWindow::applyDarkTheme()
+{
+    m_isDarkTheme = true;
+
+    applyDarkPalette(*qApp);
+
+    calendar->setStyleSheet(R"(
+        QCalendarWidget QWidget { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QAbstractItemView { background-color: #232629; color: #f0f0f0; selection-background-color: #3d4250; selection-color: #ffffff; }
+        QCalendarWidget QToolButton { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QSpinBox { background-color: #232629; color: #f0f0f0; }
+        QCalendarWidget QMenu { background-color: #232629; color: #f0f0f0; }
+    )");
+
+    list->setStyleSheet(R"(
+        QListWidget { background-color: #232629; color: #f0f0f0; border: 1px solid #3d4250; }
+        QListWidget::item { background-color: #232629; color: #f0f0f0; }
+        QListWidget::item:selected { background-color: #3d4250; color: #ffffff; }
+    )");
+
+    highlightCurrentDate();
+    highlightDatesWithNotes();
+    fillHoursList();
+}
+
+void MainWindow::applyLightTheme()
+{
+    m_isDarkTheme = false;
+
+    applyLightPalette(*qApp);
+
+    calendar->setStyleSheet(R"(
+        QCalendarWidget QWidget { background-color: #ffffff; color: #000000; }
+        QCalendarWidget QAbstractItemView { background-color: #ffffff; color: #000000; selection-background-color: #cce8ff; selection-color: #000000; }
+        QCalendarWidget QToolButton { background-color: #f0f0f0; color: #000000; }
+        QCalendarWidget QSpinBox { background-color: #f0f0f0; color: #000000; }
+        QCalendarWidget QMenu { background-color: #f0f0f0; color: #000000; }
+    )");
+
+    list->setStyleSheet(R"(
+        QListWidget { background-color: #ffffff; color: #000000; border: 1px solid #cccccc; }
+        QListWidget::item { background-color: #ffffff; color: #000000; }
+        QListWidget::item:selected { background-color: #cce8ff; color: #000000; }
+    )");
+
+    highlightCurrentDate();
+    highlightDatesWithNotes();
+    fillHoursList();
+}
+
+void MainWindow::loadSavedTheme()
+{
+    QSettings settings("MyCompany", "MyApp");
+    QString theme = settings.value("theme", "Dark").toString();
+
+    if (theme == "Light") {
+        lightThemeAction->setChecked(true);
+        applyLightTheme();
+    } else {
+        darkThemeAction->setChecked(true);
+        applyDarkTheme();
+    }
+}
+
+void MainWindow::saveTheme(const QString& themeName)
+{
+    QSettings settings("MyCompany", "MyApp");
+    settings.setValue("theme", themeName);
+}
+
+void MainWindow::changeTheme(QAction* action)
+{
+    if (!action)
+        return;
+
+    if (action == lightThemeAction) {
+        applyLightTheme();
+        saveTheme("Light");
+    } else if (action == darkThemeAction) {
+        applyDarkTheme();
+        saveTheme("Dark");
+    }
 }
