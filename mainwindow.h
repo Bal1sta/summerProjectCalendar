@@ -12,8 +12,8 @@
 #include <QMap>
 #include <QSystemTrayIcon>
 #include <QSoundEffect>
-
-
+#include <QActionGroup>
+#include <QMenu>
 
 class ItemDelegate : public QStyledItemDelegate {
 public:
@@ -45,6 +45,14 @@ private:
     QMap<QString, QTimer*> notificationTimers; // ключ: "yyyy-MM-dd_hh"
     QSoundEffect notificationSound;
 
+    // Тема и меню
+    QMenu *viewMenu;
+    QActionGroup* themeActionGroup;
+    QAction* lightThemeAction;
+    QAction* darkThemeAction;
+
+    bool m_isDarkTheme = true;
+
     void fillHoursList();
     void highlightCurrentDate();
     void highlightDatesWithNotes();
@@ -57,16 +65,17 @@ private:
     void scheduleNotificationFor(const QDate& date, int hour, const QString& note);
     void clearAllNotificationTimers();
 
+    void setupThemeMenu();
+    void applyLightTheme();
+    void applyDarkTheme();
+    void loadSavedTheme();
+    void saveTheme(const QString& themeName);
+
 private slots:
     void onDateChanged();
     void onHourDoubleClicked(QListWidgetItem* item);
     void showNotification();
-
-//*****************************************
-// public slots:
-//     void testNotification();
-//*****************************************
-
+    void changeTheme(QAction* action);
 };
 
 #endif // MAINWINDOW_H
