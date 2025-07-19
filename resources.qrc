@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/calendar_32x32.png</file>
+        <file>sounds/archivo.wav</file>
+    </qresource>
+</RCC>
