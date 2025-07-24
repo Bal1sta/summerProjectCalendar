@@ -11,6 +11,11 @@ ThemeManager::ThemeManager(QObject *parent)
 
 void ThemeManager::setupThemeMenu(QMenu *menu)
 {
+<<<<<<< HEAD
+=======
+    // Обязательно подключен <QMenu>
+
+>>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     QAction *lightThemeAction = new QAction(tr("Светлая"), menu);
     QAction *darkThemeAction = new QAction(tr("Тёмная"), menu);
 
