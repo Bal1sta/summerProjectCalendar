@@ -19,6 +19,10 @@ qt_add_executable(summerProject
     notesdatabase.h
     ${RESOURCES}
     thememanager.h thememanager.cpp
+    clienthttp.h clienthttp.cpp
+
+
+
 )
 
 target_link_libraries(summerProject

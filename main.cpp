@@ -5,10 +5,10 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    app.setStyle("Fusion"); // Рекомендуется Fusion + палитры
+    app.setStyle("Fusion");
 
     MainWindow w;
-    w.show();
+    // w.show();
 
     return app.exec();
 }

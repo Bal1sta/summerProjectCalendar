@@ -4,78 +4,93 @@
 #include <QMainWindow>
 #include <QCalendarWidget>
 #include <QListWidget>
-#include <QSqlDatabase>
-#include <QDate>
-#include <QStyledItemDelegate>
-#include <QCloseEvent>
-#include <QTimer>
-#include <QMap>
 #include <QSystemTrayIcon>
 #include <QSoundEffect>
+#include <QMap>
+#include <QTimer>
+#include <QSqlDatabase>
 #include <QActionGroup>
-#include <QMenu>
+#include <QAction>
 
-class ItemDelegate : public QStyledItemDelegate {
-public:
-    explicit ItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-        QSize size = QStyledItemDelegate::sizeHint(option, index);
-        size.setHeight(size.height() + 10);
-        return size;
-    }
-};
+#include "ClientHttp.h"
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
 
+private slots:
+    void showLoginDialog();
+
+    // UI
+    void onDateChanged();
+    void onHourDoubleClicked(QListWidgetItem* item);
+
+    // Theme
+    void changeTheme(QAction* action);
+
+    // ClientHttp slots
+    void onLoginResult(bool success, const QString &error = QString());
+    void onNotesReceived(const QJsonArray &notes);
+    void onNoteAdded(const QJsonObject &note);
+    void onNoteUpdated(const QJsonObject &note);
+    void onNoteDeleted(int id);
+    void onErrorOccurred(const QString &error);
+
+    // Notifications
+    void showNotification();
+
 private:
+    // UI elements
     QCalendarWidget* calendar;
     QListWidget* list;
+    QSystemTrayIcon* trayIcon;
+
+    // Local DB
     QSqlDatabase db;
 
-    QSystemTrayIcon* trayIcon;
-    QMap<QString, QTimer*> notificationTimers; // ключ: "yyyy-MM-dd_hh"
+    // Network client
+    ClientHttp* client;
+
+    // Cache notes by their ID
+    QMap<int, QJsonObject> notesCache;
+
+    // Notifications
+    QMap<QString, QTimer*> notificationTimers;
     QSoundEffect notificationSound;
 
-    // Тема и меню
-    QMenu *viewMenu;
+    // Themes
+    QMenu* viewMenu;
     QActionGroup* themeActionGroup;
     QAction* lightThemeAction;
     QAction* darkThemeAction;
-
     bool m_isDarkTheme = true;
 
+    // Helpers
     void fillHoursList();
     void highlightCurrentDate();
     void highlightDatesWithNotes();
-    void loadNotesForDate(const QDate& date);
-    void saveNote(const QDate& date, int hour, const QString& text);
-    void deleteNote(const QDate& date, int hour);
+    void loadNotesForDate(const QDate &date);
+
+    void saveNote(const QDate &date, int hour, int minute, const QString &text);
+    void deleteNoteById(int id);
 
     void setupTrayIcon();
+
     void scheduleNotifications();
-    void scheduleNotificationFor(const QDate& date, int hour, const QString& note);
+    void scheduleNotificationFor(const QDate &date, int hour, int minute, const QString &note);
     void clearAllNotificationTimers();
 
-    void setupThemeMenu();
-    void applyLightTheme();
     void applyDarkTheme();
+    void applyLightTheme();
     void loadSavedTheme();
-    void saveTheme(const QString& themeName);
-
-private slots:
-    void onDateChanged();
-    void onHourDoubleClicked(QListWidgetItem* item);
-    void showNotification();
-    void changeTheme(QAction* action);
+    void saveTheme(const QString &themeName);
 };
 
 #endif // MAINWINDOW_H

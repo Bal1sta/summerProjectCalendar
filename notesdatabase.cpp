@@ -42,25 +42,27 @@ bool NotesDatabase::createTableIfNotExists()
     bool success = query.exec("CREATE TABLE IF NOT EXISTS notes ("
                               "date TEXT,"
                               "hour INTEGER,"
+                              "minute INTEGER,"
                               "note TEXT,"
-                              "PRIMARY KEY(date, hour))");
+                              "PRIMARY KEY(date, hour, minute))");
     if (!success) {
         qWarning() << "Failed to create table:" << query.lastError().text();
     }
     return success;
 }
 
-QMap<int, QString> NotesDatabase::getNotesForDate(const QDate& date)
+QMap<int, QMap<int, QString>> NotesDatabase::getNotesForDate(const QDate& date)
 {
-    QMap<int, QString> notes;
+    QMap<int, QMap<int, QString>> notes;
     QSqlQuery query(db);
-    query.prepare("SELECT hour, note FROM notes WHERE date = ?");
+    query.prepare("SELECT hour, minute, note FROM notes WHERE date = ?");
     query.addBindValue(date.toString(Qt::ISODate));
     if (query.exec()) {
         while (query.next()) {
             int hour = query.value(0).toInt();
-            QString note = query.value(1).toString();
-            notes[hour] = note;
+            int minute = query.value(1).toInt();
+            QString note = query.value(2).toString();
+            notes[hour][minute] = note;
         }
     } else {
         qWarning() << "Failed to fetch notes:" << query.lastError().text();
@@ -68,12 +70,13 @@ QMap<int, QString> NotesDatabase::getNotesForDate(const QDate& date)
     return notes;
 }
 
-bool NotesDatabase::saveNote(const QDate& date, int hour, const QString& text)
+bool NotesDatabase::saveNote(const QDate& date, int hour, int minute, const QString& text)
 {
     QSqlQuery query(db);
-    query.prepare("INSERT OR REPLACE INTO notes (date, hour, note) VALUES (?, ?, ?)");
+    query.prepare("INSERT OR REPLACE INTO notes (date, hour, minute, note) VALUES (?, ?, ?, ?)");
     query.addBindValue(date.toString(Qt::ISODate));
     query.addBindValue(hour);
+    query.addBindValue(minute);
     query.addBindValue(text);
     if (!query.exec()) {
         qWarning() << "Failed to save note:" << query.lastError().text();
@@ -82,12 +85,13 @@ bool NotesDatabase::saveNote(const QDate& date, int hour, const QString& text)
     return true;
 }
 
-bool NotesDatabase::deleteNote(const QDate& date, int hour)
+bool NotesDatabase::deleteNote(const QDate& date, int hour, int minute)
 {
     QSqlQuery query(db);
-    query.prepare("DELETE FROM notes WHERE date = ? AND hour = ?");
+    query.prepare("DELETE FROM notes WHERE date = ? AND hour = ? AND minute = ?");
     query.addBindValue(date.toString(Qt::ISODate));
     query.addBindValue(hour);
+    query.addBindValue(minute);
     if (!query.exec()) {
         qWarning() << "Failed to delete note:" << query.lastError().text();
         return false;
