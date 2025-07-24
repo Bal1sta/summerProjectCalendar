@@ -3,17 +3,10 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QInputDialog>
-<<<<<<< HEAD
-=======
-#include <QTextCharFormat>
-#include <QBrush>
-#include <QColor>
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 #include <QMessageBox>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDateTime>
-<<<<<<< HEAD
 #include <QDir>
 #include <QSettings>
 #include <QMenuBar>
@@ -28,18 +21,6 @@
 // --- Темные и светлые палитры ---
 
 static void applyDarkPalette(QApplication& app) {
-=======
-#include <QDebug>
-#include <QUrl>
-#include <QDir>
-#include <QApplication>
-#include <QSettings>
-#include <QMenuBar>
-#include <QPalette>
-
-// ---- Палитры для темы ----
-void applyDarkPalette(QApplication &app) {
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     app.setStyle("Fusion");
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(53,53,53));
@@ -57,30 +38,18 @@ void applyDarkPalette(QApplication &app) {
     app.setPalette(darkPalette);
 }
 
-<<<<<<< HEAD
 static void applyLightPalette(QApplication& app) {
-=======
-void applyLightPalette(QApplication &app) {
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     app.setStyle("Fusion");
     app.setPalette(app.style()->standardPalette());
 }
 
-<<<<<<< HEAD
 // --- Конструктор MainWindow ---
-=======
-// -------------------------
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     client(new ClientHttp(this))
 {
     QWidget* centralWidget = new QWidget(this);
-<<<<<<< HEAD
-=======
-    centralWidget->setStyleSheet("background-color: #808080;");
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     setCentralWidget(centralWidget);
 
     calendar = new QCalendarWidget(this);
@@ -103,22 +72,11 @@ MainWindow::MainWindow(QWidget *parent)
     layout->addWidget(calendar);
     layout->addWidget(list);
 
-<<<<<<< HEAD
     QString folderPath = QDir::homePath() + "/summerProjectData";
     QDir dir(folderPath);
     if (!dir.exists() && !dir.mkpath(".")) {
         QMessageBox::critical(this, "Ошибка", "Не удалось создать папку для базы данных");
         return;
-=======
-    // --- Путь к БД ---
-    QString folderPath = R"(C:\_LABY_\4-Semestr\Proga_2\summerProject\summerProject)";
-    QDir dir(folderPath);
-    if (!dir.exists()) {
-        if (!dir.mkpath(".")) {
-            QMessageBox::critical(this, "Ошибка", "Не удалось создать папку для базы данных");
-            return;
-        }
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     }
 
     db = QSqlDatabase::addDatabase("QSQLITE");
@@ -126,29 +84,17 @@ MainWindow::MainWindow(QWidget *parent)
     db.setDatabaseName(dbPath);
 
     if (!db.open()) {
-<<<<<<< HEAD
         QMessageBox::critical(this, "Ошибка БД", db.lastError().text());
-=======
-        QMessageBox::critical(this, "Ошибка базы данных", db.lastError().text());
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
         return;
     }
 
     QSqlQuery query;
-<<<<<<< HEAD
     if (!query.exec("CREATE TABLE IF NOT EXISTS notes ("
                     "date TEXT,"
                     "hour INTEGER,"
                     "minute INTEGER,"
                     "note TEXT,"
                     "PRIMARY KEY(date, hour, minute))")) {
-=======
-    if(!query.exec("CREATE TABLE IF NOT EXISTS notes ("
-                    "date TEXT,"
-                    "hour INTEGER,"
-                    "note TEXT,"
-                    "PRIMARY KEY(date, hour))")) {
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
         QMessageBox::critical(this, "Ошибка SQL", query.lastError().text());
         return;
     }
@@ -161,36 +107,20 @@ MainWindow::MainWindow(QWidget *parent)
     connect(list, &QListWidget::itemDoubleClicked, this, &MainWindow::onHourDoubleClicked);
 
     setMinimumSize(800, 600);
-<<<<<<< HEAD
-=======
-    list->setItemDelegate(new ItemDelegate(list));
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
     setupTrayIcon();
 
     notificationSound.setSource(QUrl("qrc:/sounds/sounds/archivo.wav"));
     notificationSound.setVolume(0.5f);
 
-<<<<<<< HEAD
     QApplication::setWindowIcon(QIcon(":/icons/icons/calendar_32x32.png"));
 
     // Темы меню
-=======
-    scheduleNotifications();
-
-    QApplication::setWindowIcon(QIcon(":/icons/icons/calendar_32x32.png"));
-
-    // Меню темы
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     viewMenu = menuBar()->addMenu(tr("Вид"));
 
     themeActionGroup = new QActionGroup(this);
     lightThemeAction = new QAction(tr("Светлая"), this);
     lightThemeAction->setCheckable(true);
-<<<<<<< HEAD
-=======
-
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     darkThemeAction = new QAction(tr("Тёмная"), this);
     darkThemeAction->setCheckable(true);
 
@@ -203,7 +133,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(themeActionGroup, &QActionGroup::triggered, this, &MainWindow::changeTheme);
 
     loadSavedTheme();
-<<<<<<< HEAD
 
     // Сигналы ClientHttp
     connect(client, &ClientHttp::loginResult, this, &MainWindow::onLoginResult);
@@ -223,14 +152,11 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     showLoginDialog();
-=======
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 MainWindow::~MainWindow()
 {
     clearAllNotificationTimers();
-<<<<<<< HEAD
 }
 
 void MainWindow::showLoginDialog()
@@ -458,29 +384,20 @@ void MainWindow::onNoteDeleted(int id)
 void MainWindow::onErrorOccurred(const QString &error)
 {
     QMessageBox::warning(this, "Ошибка", error);
-=======
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 void MainWindow::fillHoursList()
 {
     list->clear();
-<<<<<<< HEAD
     for (int hour=0; hour<24; ++hour)
         list->addItem(QString("%1:00").arg(hour,2,10,QChar('0')));
 
-=======
-    for (int hour = 0; hour < 24; ++hour) {
-        list->addItem(QString("%1:00").arg(hour, 2, 10, QChar('0')));
-    }
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     loadNotesForDate(calendar->selectedDate());
 }
 
 void MainWindow::highlightCurrentDate()
 {
     QTextCharFormat format;
-<<<<<<< HEAD
     if(m_isDarkTheme) {
         format.setBackground(QBrush(QColor(0,122,204)));
         format.setForeground(QBrush(Qt::black));
@@ -488,28 +405,13 @@ void MainWindow::highlightCurrentDate()
         format.setBackground(QBrush(QColor(0,122,204)));
         format.setForeground(QBrush(Qt::white));
     }
-=======
-
-    if (m_isDarkTheme) {
-        format.setBackground(QBrush(QColor(0, 122, 204))); // синий фон
-        format.setForeground(QBrush(Qt::black));
-    } else {
-        format.setBackground(QBrush(QColor(0, 122, 204)));
-        format.setForeground(QBrush(Qt::white));
-    }
-
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     QDate today = QDate::currentDate();
     calendar->setDateTextFormat(today, format);
 }
 
 void MainWindow::highlightDatesWithNotes()
 {
-<<<<<<< HEAD
     calendar->setDateTextFormat(QDate(), QTextCharFormat()); // очистить форматирование
-=======
-    calendar->setDateTextFormat(QDate(), QTextCharFormat()); // сброс формата
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     highlightCurrentDate();
 
     QTextCharFormat noteFormat;
@@ -522,7 +424,6 @@ void MainWindow::highlightDatesWithNotes()
     }
 
     QSqlQuery query("SELECT DISTINCT date FROM notes");
-<<<<<<< HEAD
     while(query.next()){
         QDate date = QDate::fromString(query.value(0).toString(), Qt::ISODate);
         if(date.isValid())
@@ -566,31 +467,10 @@ void MainWindow::loadNotesForDate(const QDate &date)
 
         if(hour >=0 && hour < list->count()){
             list->item(hour)->setText(combinedText);
-=======
-    while (query.next()) {
-        QDate date = QDate::fromString(query.value(0).toString(), Qt::ISODate);
-        calendar->setDateTextFormat(date, noteFormat);
-    }
-}
-
-void MainWindow::loadNotesForDate(const QDate& date)
-{
-    QSqlQuery query;
-    query.prepare("SELECT hour, note FROM notes WHERE date = ?");
-    query.addBindValue(date.toString(Qt::ISODate));
-    query.exec();
-
-    while (query.next()) {
-        int hour = query.value(0).toInt();
-        QString note = query.value(1).toString();
-        if (hour >= 0 && hour < list->count()) {
-            list->item(hour)->setText(QString("%1:00 - %2").arg(hour, 2, 10, QChar('0')).arg(note));
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
         }
     }
 }
 
-<<<<<<< HEAD
 void MainWindow::saveNote(const QDate &date, int hour, int minute, const QString &text)
 {
     // QSqlQuery query(db);
@@ -649,29 +529,6 @@ void MainWindow::deleteNoteById(int id)
         qWarning() << "Ошибка exec deleteNote:" << query.lastError().text();
 
     client->deleteNote(id);
-=======
-void MainWindow::saveNote(const QDate& date, int hour, const QString& text)
-{
-    QSqlQuery query;
-    query.prepare("INSERT OR REPLACE INTO notes (date, hour, note) VALUES (?, ?, ?)");
-    query.addBindValue(date.toString(Qt::ISODate));
-    query.addBindValue(hour);
-    query.addBindValue(text);
-    if (!query.exec()){
-        qDebug() << "Ошибка сохранения заметки:" << query.lastError().text();
-    }
-}
-
-void MainWindow::deleteNote(const QDate& date, int hour)
-{
-    QSqlQuery query;
-    query.prepare("DELETE FROM notes WHERE date = ? AND hour = ?");
-    query.addBindValue(date.toString(Qt::ISODate));
-    query.addBindValue(hour);
-    if (!query.exec()){
-        qDebug() << "Ошибка удаления заметки:" << query.lastError().text();
-    }
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 void MainWindow::onDateChanged()
@@ -692,7 +549,6 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
         return;
 
     QString currentNote;
-<<<<<<< HEAD
     int existingId = -1;
     for (auto it=notesCache.begin(); it!=notesCache.end(); ++it) {
         const QJsonObject& obj = it.value();
@@ -704,15 +560,6 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
             existingId = it.key();
             break;
         }
-=======
-    QSqlQuery query;
-    query.prepare("SELECT note FROM notes WHERE date = ? AND hour = ?");
-    query.addBindValue(selectedDate.toString(Qt::ISODate));
-    query.addBindValue(hour);
-    query.exec();
-    if (query.next()) {
-        currentNote = query.value(0).toString();
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     }
 
     bool okText;
@@ -721,7 +568,6 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
                                          "Введите заметку:",
                                          QLineEdit::Normal,
                                          currentNote,
-<<<<<<< HEAD
                                          &okText);
     if (!okText)
         return;
@@ -734,21 +580,6 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
     // fillHoursList();
     // highlightDatesWithNotes();
     // scheduleNotifications();
-=======
-                                         &ok);
-    if (ok) {
-        if (text.isEmpty()) {
-            deleteNote(selectedDate, hour);
-            list->item(hour)->setText(QString("%1:00").arg(hour, 2, 10, QChar('0')));
-        } else {
-            saveNote(selectedDate, hour, text);
-            list->item(hour)->setText(QString("%1:00 - %2").arg(hour, 2, 10, QChar('0')).arg(text));
-        }
-        highlightDatesWithNotes();
-
-        scheduleNotifications();
-    }
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 void MainWindow::setupTrayIcon()
@@ -762,7 +593,6 @@ void MainWindow::scheduleNotifications()
 {
     clearAllNotificationTimers();
 
-<<<<<<< HEAD
     QSqlQuery query("SELECT date, hour, minute, note FROM notes");
     while (query.next()) {
         QDate date = QDate::fromString(query.value(0).toString(), Qt::ISODate);
@@ -776,50 +606,22 @@ void MainWindow::scheduleNotifications()
 void MainWindow::scheduleNotificationFor(const QDate &date, int hour, int minute, const QString &note)
 {
     QDateTime noteDateTime(date, QTime(hour, minute));
-=======
-    QSqlQuery query("SELECT date, hour, note FROM notes");
-    while (query.next()) {
-        QDate date = QDate::fromString(query.value(0).toString(), Qt::ISODate);
-        int hour = query.value(1).toInt();
-        QString note = query.value(2).toString();
-
-        scheduleNotificationFor(date, hour, note);
-    }
-}
-
-void MainWindow::scheduleNotificationFor(const QDate& date, int hour, const QString& note)
-{
-    QDateTime noteDateTime(date, QTime(hour, 0, 0));
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     QDateTime notifyTime = noteDateTime.addSecs(-30 * 60); // за 30 минут
 
     QDateTime now = QDateTime::currentDateTime();
 
-<<<<<<< HEAD
     if (notifyTime <= now)
         return;
-=======
-    if (notifyTime <= now) {
-        return; // Время уведомления уже прошло
-    }
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
     qint64 msecToNotify = now.msecsTo(notifyTime);
     if (msecToNotify <= 0)
         return;
 
-<<<<<<< HEAD
     QString key = date.toString(Qt::ISODate) + "_" + QString::number(hour) + "_" + QString::number(minute);
 
     QTimer* timer = new QTimer(this);
     timer->setSingleShot(true);
 
-=======
-    QString key = date.toString(Qt::ISODate) + "_" + QString::number(hour);
-
-    QTimer* timer = new QTimer(this);
-    timer->setSingleShot(true);
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     connect(timer, &QTimer::timeout, this, &MainWindow::showNotification);
 
     notificationTimers[key] = timer;
@@ -828,11 +630,6 @@ void MainWindow::scheduleNotificationFor(const QDate& date, int hour, const QStr
     timer->setProperty("noteDateTime", noteDateTime);
 
     timer->start(msecToNotify);
-<<<<<<< HEAD
-=======
-
-    qDebug() << "Scheduled notification for" << notifyTime.toString() << "note:" << note;
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 void MainWindow::clearAllNotificationTimers()
@@ -870,10 +667,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
 void MainWindow::applyDarkTheme()
 {
     m_isDarkTheme = true;
-<<<<<<< HEAD
-=======
-
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
     applyDarkPalette(*qApp);
 
     calendar->setStyleSheet(R"(
@@ -898,17 +691,12 @@ void MainWindow::applyDarkTheme()
 void MainWindow::applyLightTheme()
 {
     m_isDarkTheme = false;
-<<<<<<< HEAD
     applyLightPalette(*qApp);
 
     // Обновляем виджеты
     highlightCurrentDate();
     highlightDatesWithNotes();
     fillHoursList(); // или loadNotesForDate(calendar->selectedDate());
-=======
-
-    applyLightPalette(*qApp);
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
     calendar->setStyleSheet(R"(
         QCalendarWidget QWidget { background-color: #ffffff; color: #000000; }
@@ -923,13 +711,6 @@ void MainWindow::applyLightTheme()
         QListWidget::item { background-color: #ffffff; color: #000000; }
         QListWidget::item:selected { background-color: #cce8ff; color: #000000; }
     )");
-<<<<<<< HEAD
-=======
-
-    highlightCurrentDate();
-    highlightDatesWithNotes();
-    fillHoursList();
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 }
 
 void MainWindow::loadSavedTheme()
@@ -946,21 +727,13 @@ void MainWindow::loadSavedTheme()
     }
 }
 
-<<<<<<< HEAD
 void MainWindow::saveTheme(const QString &themeName)
-=======
-void MainWindow::saveTheme(const QString& themeName)
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 {
     QSettings settings("MyCompany", "MyApp");
     settings.setValue("theme", themeName);
 }
 
-<<<<<<< HEAD
 void MainWindow::changeTheme(QAction *action)
-=======
-void MainWindow::changeTheme(QAction* action)
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 {
     if (!action)
         return;

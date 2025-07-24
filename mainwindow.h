@@ -4,7 +4,6 @@
 #include <QMainWindow>
 #include <QCalendarWidget>
 #include <QListWidget>
-<<<<<<< HEAD
 #include <QSystemTrayIcon>
 #include <QSoundEffect>
 #include <QMap>
@@ -14,28 +13,6 @@
 #include <QAction>
 
 #include "ClientHttp.h"
-=======
-#include <QSqlDatabase>
-#include <QDate>
-#include <QStyledItemDelegate>
-#include <QCloseEvent>
-#include <QTimer>
-#include <QMap>
-#include <QSystemTrayIcon>
-#include <QSoundEffect>
-#include <QActionGroup>
-#include <QMenu>
-
-class ItemDelegate : public QStyledItemDelegate {
-public:
-    explicit ItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-        QSize size = QStyledItemDelegate::sizeHint(option, index);
-        size.setHeight(size.height() + 10);
-        return size;
-    }
-};
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
 class MainWindow : public QMainWindow
 {
@@ -47,44 +24,6 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
-<<<<<<< HEAD
-=======
-
-private:
-    QCalendarWidget* calendar;
-    QListWidget* list;
-    QSqlDatabase db;
-
-    QSystemTrayIcon* trayIcon;
-    QMap<QString, QTimer*> notificationTimers; // ключ: "yyyy-MM-dd_hh"
-    QSoundEffect notificationSound;
-
-    // Тема и меню
-    QMenu *viewMenu;
-    QActionGroup* themeActionGroup;
-    QAction* lightThemeAction;
-    QAction* darkThemeAction;
-
-    bool m_isDarkTheme = true;
-
-    void fillHoursList();
-    void highlightCurrentDate();
-    void highlightDatesWithNotes();
-    void loadNotesForDate(const QDate& date);
-    void saveNote(const QDate& date, int hour, const QString& text);
-    void deleteNote(const QDate& date, int hour);
-
-    void setupTrayIcon();
-    void scheduleNotifications();
-    void scheduleNotificationFor(const QDate& date, int hour, const QString& note);
-    void clearAllNotificationTimers();
-
-    void setupThemeMenu();
-    void applyLightTheme();
-    void applyDarkTheme();
-    void loadSavedTheme();
-    void saveTheme(const QString& themeName);
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 
 private slots:
     void showLoginDialog();
@@ -92,7 +31,6 @@ private slots:
     // UI
     void onDateChanged();
     void onHourDoubleClicked(QListWidgetItem* item);
-<<<<<<< HEAD
 
     // Theme
     void changeTheme(QAction* action);
@@ -153,10 +91,6 @@ private:
     void applyLightTheme();
     void loadSavedTheme();
     void saveTheme(const QString &themeName);
-=======
-    void showNotification();
-    void changeTheme(QAction* action);
->>>>>>> 33978bc2a58cb07d16ba6eb66d32f282a4862a9b
 };
 
 #endif // MAINWINDOW_H
