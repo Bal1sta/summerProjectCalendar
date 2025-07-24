@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 
 # --- Конфигурация ---
-APP_SECRET = "CHANGE_THIS_SECRET"  # Замените на свой сложный секретный ключ
+APP_SECRET = "CHANGE_THIS_SECRET"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -19,7 +19,8 @@ app = FastAPI()
 
 # --- Инициализация базы данных ---
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         # Таблица пользователей
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -43,8 +44,7 @@ def init_db():
 
 init_db()
 
-# --- Password hashing и OAuth2 ---
-# pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# --- Password hashing и OAuth2 (без изменений) ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
@@ -56,18 +56,18 @@ def get_password_hash(password):
 
 # --- Работа с пользователями в базе ---
 def get_user(username: str):
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         cur = conn.execute("SELECT username, hashed_password FROM users WHERE username = ?", (username,))
         row = cur.fetchone()
         if row:
             return {"username": row[0], "hashed_password": row[1]}
     return None
 
+# --- Логика аутентификации и токенов (без изменений) ---
 def authenticate_user(username: str, password: str):
     user = get_user(username)
-    if not user:
-        return False
-    if not verify_password(password, user["hashed_password"]):
+    if not user or not verify_password(password, user["hashed_password"]):
         return False
     return user
 
@@ -80,14 +80,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Неверные учетные данные",
-        headers={"WWW-Authenticate": "Bearer"},
+        detail="Неверные учетные данные", headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, APP_SECRET, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
+        if username is None: raise credentials_exception
     except JWTError:
         raise credentials_exception
     user = get_user(username)
@@ -95,7 +93,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-# --- Pydantic модели ---
+# --- Pydantic модели (без изменений) ---
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -110,17 +108,16 @@ class Note(BaseModel):
 
 # --- Эндпоинты ---
 
-# Регистрация пользователя
 @app.post("/register", status_code=201)
 def register(user: UserCreate):
     if get_user(user.username):
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
     hashed_password = get_password_hash(user.password)
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         conn.execute("INSERT INTO users (username, hashed_password) VALUES (?, ?)", (user.username, hashed_password))
     return {"msg": "Пользователь создан"}
 
-# Вход с выдачей токена
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
@@ -132,33 +129,29 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-# Пример защищённого эндпоинта для проверки текущего пользователя
 @app.get("/me")
 def read_users_me(current_user=Depends(get_current_user)):
     return {"username": current_user["username"]}
 
-# Получить список заметок текущего пользователя (включая те, которыми с ним поделились)
 @app.get("/notes", response_model=List[Note])
 def get_notes(current_user=Depends(get_current_user)):
     username = current_user["username"]
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         rows = conn.execute(
             """SELECT id, date, hour, minute, note, shared_with FROM notes 
                WHERE owner = ? OR (shared_with LIKE '%' || ? || '%')""",
             (username, username)
         ).fetchall()
-    result = []
-    for r in rows:
-        shared = r[5].split(",") if r[5] else []
-        result.append(Note(id=r[0], date=r[1], hour=r[2], minute=r[3], note=r[4], shared_with=shared))
+    result = [Note(id=r[0], date=r[1], hour=r[2], minute=r[3], note=r[4], shared_with=r[5].split(",") if r[5] else []) for r in rows]
     return result
 
-# Добавить новую заметку
 @app.post("/notes", response_model=Note)
 def add_note(note: Note, current_user=Depends(get_current_user)):
     username = current_user["username"]
     shared_str = ",".join(note.shared_with) if note.shared_with else ""
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         cur = conn.execute(
             "INSERT INTO notes (owner, date, hour, minute, note, shared_with) VALUES (?, ?, ?, ?, ?, ?)",
             (username, note.date, note.hour, note.minute, note.note, shared_str)
@@ -166,11 +159,11 @@ def add_note(note: Note, current_user=Depends(get_current_user)):
         note.id = cur.lastrowid
     return note
 
-# Обновить существующую заметку (только если владелец текущий пользователь)
 @app.put("/notes/{note_id}", response_model=Note)
 def update_note(note_id: int, note: Note, current_user=Depends(get_current_user)):
     username = current_user["username"]
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
         row = cur.fetchone()
         if not row or row[0] != username:
@@ -183,11 +176,11 @@ def update_note(note_id: int, note: Note, current_user=Depends(get_current_user)
     note.id = note_id
     return note
 
-# Удалить заметку (только если владелец)
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int, current_user=Depends(get_current_user)):
     username = current_user["username"]
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавляем timeout=10
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
         row = cur.fetchone()
         if not row or row[0] != username:
@@ -203,25 +196,3 @@ if __name__ == "__main__":
 @app.get("/")
 def root():
     return {"message": "API работает"}
-
-
-{
-    "username": "testuser",
-    "password": "testpassword"
-}
-
-# # Функция создания пользователя по умолчанию
-# def create_default_user():
-#     if not get_user("qwe"):
-#         hashed_password = get_password_hash("123")
-#         with sqlite3.connect(DB_PATH) as conn:
-#             conn.execute(
-#                 "INSERT INTO users (username, hashed_password) VALUES (?, ?)",
-#                 ("qwe", hashed_password)
-#             )
-#         print('Пользователь "qwe" с паролем "123" создан автоматически.')
-
-
-# # Инициализация БД и создание дефолтного пользователя
-# init_db()
-# create_default_user()
