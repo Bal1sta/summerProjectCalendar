@@ -8,27 +8,32 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 
 # --- Конфигурация ---
-APP_SECRET = "CHANGE_THIS_SECRET"
+APP_SECRET = "YOUR_SUPER_SECRET_KEY_HERE"  # Замените на свой сложный ключ
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 DB_PATH = "notes_shared.db"
+
+# --- Предопределенные роли ----------------------------------------------
+PREDEFINED_ROLES = {
+    "qwe": "editor",
+    "ewq": "viewer"
+}
+DEFAULT_ROLE = "viewer"
+# ------------------------------------------------------------------------
+
 
 # --- Инициализация FastAPI ---
 app = FastAPI()
 
-# --- Инициализация базы данных ---
+# --- Инициализация базы данных (убрали колонку role) ---
 def init_db():
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        # Таблица пользователей
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
                 hashed_password TEXT NOT NULL
             )
         """)
-        # Таблица заметок
         conn.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,10 +46,9 @@ def init_db():
                 FOREIGN KEY(owner) REFERENCES users(username)
             )
         """)
-
 init_db()
 
-# --- Password hashing и OAuth2 (без изменений) ---
+# --- Утилиты для паролей и токенов (без изменений) ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
@@ -54,28 +58,29 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-# --- Работа с пользователями в базе ---
-def get_user(username: str):
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, APP_SECRET, algorithm=ALGORITHM)
+
+# --- Аутентификация и авторизация ---
+def get_user_from_db(username: str):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
         cur = conn.execute("SELECT username, hashed_password FROM users WHERE username = ?", (username,))
         row = cur.fetchone()
         if row:
-            return {"username": row[0], "hashed_password": row[1]}
+            return dict(row)
     return None
 
-# --- Логика аутентификации и токенов (без изменений) ---
 def authenticate_user(username: str, password: str):
-    user = get_user(username)
-    if not user or not verify_password(password, user["hashed_password"]):
+    user = get_user_from_db(username)
+    if not user:
+        return False
+    if not verify_password(password, user["hashed_password"]):
         return False
     return user
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, APP_SECRET, algorithm=ALGORITHM)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -85,13 +90,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, APP_SECRET, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None: raise credentials_exception
+        role: str = payload.get("role") # Извлекаем роль из токена
+        if username is None or role is None:
+            raise credentials_exception
+        token_data = {"username": username, "role": role}
     except JWTError:
         raise credentials_exception
-    user = get_user(username)
-    if user is None:
-        raise credentials_exception
-    return user
+    return token_data
+
+async def get_current_editor(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "editor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для выполнения этого действия",
+        )
+    return current_user
 
 # --- Pydantic модели (без изменений) ---
 class UserCreate(BaseModel):
@@ -107,14 +120,12 @@ class Note(BaseModel):
     shared_with: Optional[List[str]] = []
 
 # --- Эндпоинты ---
-
 @app.post("/register", status_code=201)
 def register(user: UserCreate):
-    if get_user(user.username):
+    if get_user_from_db(user.username):
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
     hashed_password = get_password_hash(user.password)
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute("INSERT INTO users (username, hashed_password) VALUES (?, ?)", (user.username, hashed_password))
     return {"msg": "Пользователь создан"}
 
@@ -123,35 +134,40 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+
+    # Определяем роль на основе имени пользователя
+    user_role = PREDEFINED_ROLES.get(user["username"], DEFAULT_ROLE)
+
     access_token = create_access_token(
-        data={"sub": user["username"]},
+        data={"sub": user["username"], "role": user_role}, # Записываем роль в токен
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "user_role": user_role}
 
-@app.get("/me")
-def read_users_me(current_user=Depends(get_current_user)):
-    return {"username": current_user["username"]}
-
+# Защищаем эндпоинты
 @app.get("/notes", response_model=List[Note])
-def get_notes(current_user=Depends(get_current_user)):
+def get_notes(current_user: dict = Depends(get_current_user)): # Доступно всем
+    # ... код без изменений ...
     username = current_user["username"]
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            """SELECT id, date, hour, minute, note, shared_with FROM notes 
+            """SELECT id, date, hour, minute, note, shared_with FROM notes
                WHERE owner = ? OR (shared_with LIKE '%' || ? || '%')""",
             (username, username)
         ).fetchall()
-    result = [Note(id=r[0], date=r[1], hour=r[2], minute=r[3], note=r[4], shared_with=r[5].split(",") if r[5] else []) for r in rows]
+    result = []
+    for r in rows:
+        shared = r["shared_with"].split(",") if r["shared_with"] else []
+        result.append(Note(id=r["id"], date=r["date"], hour=r["hour"], minute=r["minute"], note=r["note"], shared_with=shared))
     return result
 
 @app.post("/notes", response_model=Note)
-def add_note(note: Note, current_user=Depends(get_current_user)):
+def add_note(note: Note, current_user: dict = Depends(get_current_editor)): # Только для editor
+    # ... код без изменений ...
     username = current_user["username"]
     shared_str = ",".join(note.shared_with) if note.shared_with else ""
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cur = conn.execute(
             "INSERT INTO notes (owner, date, hour, minute, note, shared_with) VALUES (?, ?, ?, ?, ?, ?)",
             (username, note.date, note.hour, note.minute, note.note, shared_str)
@@ -160,14 +176,14 @@ def add_note(note: Note, current_user=Depends(get_current_user)):
     return note
 
 @app.put("/notes/{note_id}", response_model=Note)
-def update_note(note_id: int, note: Note, current_user=Depends(get_current_user)):
+def update_note(note_id: int, note: Note, current_user: dict = Depends(get_current_editor)): # Только для editor
+    # ... код без изменений ...
     username = current_user["username"]
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
         row = cur.fetchone()
         if not row or row[0] != username:
-            raise HTTPException(status_code=403, detail="Нет прав для редактирования")
+            raise HTTPException(status_code=403, detail="Нет прав для редактирования этой заметки")
         shared_str = ",".join(note.shared_with) if note.shared_with else ""
         conn.execute(
             "UPDATE notes SET date=?, hour=?, minute=?, note=?, shared_with=? WHERE id=?",
@@ -177,22 +193,13 @@ def update_note(note_id: int, note: Note, current_user=Depends(get_current_user)
     return note
 
 @app.delete("/notes/{note_id}")
-def delete_note(note_id: int, current_user=Depends(get_current_user)):
+def delete_note(note_id: int, current_user: dict = Depends(get_current_editor)): # Только для editor
+    # ... код без изменений ...
     username = current_user["username"]
-    # Добавляем timeout=10
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
         row = cur.fetchone()
         if not row or row[0] != username:
-            raise HTTPException(status_code=403, detail="Нет прав для удаления")
+            raise HTTPException(status_code=403, detail="Нет прав для удаления этой заметки")
         conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
     return {"msg": "Заметка удалена"}
-
-# --- Запуск через uvicorn ---
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-@app.get("/")
-def root():
-    return {"message": "API работает"}
