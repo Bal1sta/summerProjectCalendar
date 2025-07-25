@@ -15,8 +15,9 @@ DB_PATH = "notes_shared.db"
 
 # --- Предопределенные роли ----------------------------------------------
 PREDEFINED_ROLES = {
-    "qwe": "editor",
-    "ewq": "viewer"
+    "qwe": "editor"
+#    "qwe": "viewer"
+
 }
 DEFAULT_ROLE = "viewer"
 # ------------------------------------------------------------------------
@@ -106,7 +107,7 @@ async def get_current_editor(current_user: dict = Depends(get_current_user)):
         )
     return current_user
 
-# --- Pydantic модели (без изменений) ---
+
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -144,22 +145,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer", "user_role": user_role}
 
-# Защищаем эндпоинты
 @app.get("/notes", response_model=List[Note])
-def get_notes(current_user: dict = Depends(get_current_user)): # Доступно всем
-    # ... код без изменений ...
-    username = current_user["username"]
+def get_notes(current_user: dict = Depends(get_current_user)):
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            """SELECT id, date, hour, minute, note, shared_with FROM notes
-               WHERE owner = ? OR (shared_with LIKE '%' || ? || '%')""",
-            (username, username)
+            """SELECT id, date, hour, minute, note, shared_with FROM notes"""
         ).fetchall()
+        
     result = []
     for r in rows:
+        # Преобразование строки 'shared_with' в список остается, на случай если поле используется где-то еще
         shared = r["shared_with"].split(",") if r["shared_with"] else []
         result.append(Note(id=r["id"], date=r["date"], hour=r["hour"], minute=r["minute"], note=r["note"], shared_with=shared))
+        
     return result
 
 @app.post("/notes", response_model=Note)
@@ -177,7 +177,7 @@ def add_note(note: Note, current_user: dict = Depends(get_current_editor)): # Т
 
 @app.put("/notes/{note_id}", response_model=Note)
 def update_note(note_id: int, note: Note, current_user: dict = Depends(get_current_editor)): # Только для editor
-    # ... код без изменений ...
+
     username = current_user["username"]
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
@@ -194,7 +194,7 @@ def update_note(note_id: int, note: Note, current_user: dict = Depends(get_curre
 
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int, current_user: dict = Depends(get_current_editor)): # Только для editor
-    # ... код без изменений ...
+
     username = current_user["username"]
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.execute("SELECT owner FROM notes WHERE id = ?", (note_id,))
