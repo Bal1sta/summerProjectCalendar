@@ -36,7 +36,7 @@ private slots:
     void changeTheme(QAction* action);
 
     // ClientHttp slots
-    void onLoginResult(bool success, const QString &error = QString());
+    void onLoginResult(bool success, const QString &role, const QString &error = QString());
     void onNotesReceived(const QJsonArray &notes);
     void onNoteAdded(const QJsonObject &note);
     void onNoteUpdated(const QJsonObject &note);
@@ -57,6 +57,8 @@ private:
 
     // Network client
     ClientHttp* client;
+    QTimer* m_notesUpdateTimer;
+    QString m_currentUserRole; // Поле для роли
 
     // Cache notes by their ID
     QMap<int, QJsonObject> notesCache;

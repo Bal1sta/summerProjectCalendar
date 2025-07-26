@@ -11,12 +11,9 @@
 #include <QSettings>
 #include <QMenuBar>
 #include <QCloseEvent>
-#include <QAbstractButton>
-#include <QDebug>
-#include <QTimer>
-#include <QApplication>
 #include <QPushButton>
 #include <QJsonArray>
+#include <QTextCharFormat>
 
 // --- Темные и светлые палитры ---
 
@@ -90,11 +87,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     QSqlQuery query;
     if (!query.exec("CREATE TABLE IF NOT EXISTS notes ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     "date TEXT,"
                     "hour INTEGER,"
                     "minute INTEGER,"
-                    "note TEXT,"
-                    "PRIMARY KEY(date, hour, minute))")) {
+                    "note TEXT)")) {
         QMessageBox::critical(this, "Ошибка SQL", query.lastError().text());
         return;
     }
@@ -151,12 +148,24 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
+    // <-- ИЗМЕНЕНИЕ: Инициализация и подключение таймера для обновления заметок
+    m_notesUpdateTimer = new QTimer(this);
+    connect(m_notesUpdateTimer, &QTimer::timeout, this, [this](){
+        // Запрашиваем обновления, только если окно видимо и клиент существует
+        if (client && this->isVisible()) {
+            client->fetchNotes();
+        }
+    });
+
     showLoginDialog();
 }
 
 MainWindow::~MainWindow()
 {
     clearAllNotificationTimers();
+    if(m_notesUpdateTimer) { // <-- ИЗМЕНЕНИЕ: Безопасная остановка таймера
+        m_notesUpdateTimer->stop();
+    }
 }
 
 void MainWindow::showLoginDialog()
@@ -207,9 +216,8 @@ void MainWindow::showLoginDialog()
             }
             client->setServerUrl(url); // Устанавливаем URL в клиенте
         }
-        // --- КОНЕЦ БЛОКА ЗАПРОСА URL ---
 
-        else if(msgBox.clickedButton() == registerButton) {
+        if(msgBox.clickedButton() == registerButton) {
             QString username;
             // --- ЦИКЛ ВАЛИДАЦИИ ДЛЯ ИМЕНИ ПОЛЬЗОВАТЕЛЯ ---
             while(true) {
@@ -248,7 +256,6 @@ void MainWindow::showLoginDialog()
             return; // Выходим из showLoginDialog, ждем асинхронного ответа
         }
         else if(msgBox.clickedButton() == loginButton) {
-            // Здесь та же самая логика с циклами валидации
             QString user;
             while(true) {
                 bool okUser = false;
@@ -282,20 +289,37 @@ void MainWindow::showLoginDialog()
     }
 }
 
-void MainWindow::onLoginResult(bool success, const QString &error)
+void MainWindow::onLoginResult(bool success, const QString &role, const QString &error)
 {
     if(success){
         QMessageBox::information(this, "Авторизация", "Успешный вход");
+        m_currentUserRole = role; // Сохраняем роль
+
+        if (m_currentUserRole == "viewer") {
+            QMessageBox::information(this, "Режим доступа", "Вы вошли в режиме просмотра. Редактирование недоступно.");
+        }
+
         client->fetchNotes();
         this->show();
+        m_notesUpdateTimer->start(5000); // <-- ИЗМЕНЕНИЕ: Запускаем таймер на 5 секунд
     } else {
         QMessageBox::critical(this, "Ошибка", error.isEmpty() ? "Не удалось войти" : error);
+        m_notesUpdateTimer->stop(); // <-- ИЗМЕНЕНИЕ: Останавливаем таймер при неудаче
         showLoginDialog();
     }
 }
 
 void MainWindow::onNotesReceived(const QJsonArray &notes)
 {
+    // Оптимизация: проверяем, изменились ли данные, прежде чем всё перерисовывать
+    QJsonArray currentNotesArray;
+    for(const QJsonObject& note : notesCache) {
+        currentNotesArray.append(note);
+    }
+    if (currentNotesArray == notes) {
+        return; // Если данные не изменились, выходим, чтобы избежать мерцания
+    }
+
     notesCache.clear();
 
     QSqlQuery query(db);
@@ -309,7 +333,8 @@ void MainWindow::onNotesReceived(const QJsonArray &notes)
         int id = obj.value("id").toInt();
         notesCache[id] = obj;
 
-        query.prepare("INSERT OR REPLACE INTO notes (date, hour, minute, note) VALUES (?, ?, ?, ?)");
+        query.prepare("INSERT OR REPLACE INTO notes (id, date, hour, minute, note) VALUES (?, ?, ?, ?, ?)");
+        query.addBindValue(id);
         query.addBindValue(obj.value("date").toString());
         query.addBindValue(obj.value("hour").toInt());
         query.addBindValue(obj.value("minute").toInt());
@@ -327,58 +352,21 @@ void MainWindow::onNotesReceived(const QJsonArray &notes)
 
 void MainWindow::onNoteAdded(const QJsonObject &note)
 {
-    int id = note.value("id").toInt();
-    notesCache[id] = note;
-
-    QSqlQuery query(db);
-    query.prepare("INSERT OR REPLACE INTO notes (date, hour, minute, note) VALUES (?, ?, ?, ?)");
-    query.addBindValue(note.value("date").toString());
-    query.addBindValue(note.value("hour").toInt());
-    query.addBindValue(note.value("minute").toInt());
-    query.addBindValue(note.value("note").toString());
-    if (!query.exec()) {
-        qWarning() << "Ошибка вставки заметки после addNote:" << query.lastError().text();
-    }
-
-    loadNotesForDate(calendar->selectedDate());
-    highlightDatesWithNotes();
-    scheduleNotifications();
+    // После добавления новой заметки просто запрашиваем полный список,
+    // чтобы гарантировать консистентность данных
+    client->fetchNotes();
 }
 
 void MainWindow::onNoteUpdated(const QJsonObject &note)
 {
-    int id = note.value("id").toInt();
-    notesCache[id] = note;
-
-    QSqlQuery query(db);
-    query.prepare("UPDATE notes SET note = ? WHERE date = ? AND hour = ? AND minute = ?");
-    query.addBindValue(note.value("note").toString());
-    query.addBindValue(note.value("date").toString());
-    query.addBindValue(note.value("hour").toInt());
-    query.addBindValue(note.value("minute").toInt());
-    if (!query.exec()) {
-        qWarning() << "Ошибка обновления заметки:" << query.lastError().text();
-    }
-
-    loadNotesForDate(calendar->selectedDate());
-    highlightDatesWithNotes();
-    scheduleNotifications();
+    // Аналогично, после обновления запрашиваем полный список
+    client->fetchNotes();
 }
 
 void MainWindow::onNoteDeleted(int id)
 {
-    notesCache.remove(id);
-
-    QSqlQuery query(db);
-    if (!query.exec("DELETE FROM notes")) {
-        qWarning() << "Ошибка очистки заметок после удаления:" << query.lastError().text();
-    }
-
+    // И после удаления тоже
     client->fetchNotes();
-
-    loadNotesForDate(calendar->selectedDate());
-    highlightDatesWithNotes();
-    scheduleNotifications();
 }
 
 void MainWindow::onErrorOccurred(const QString &error)
@@ -411,12 +399,17 @@ void MainWindow::highlightCurrentDate()
 
 void MainWindow::highlightDatesWithNotes()
 {
-    calendar->setDateTextFormat(QDate(), QTextCharFormat()); // очистить форматирование
-    highlightCurrentDate();
+    // Сначала сбрасываем все форматирования, кроме сегодняшней даты
+    QMap<QDate, QTextCharFormat> savedFormats;
+    QDate today = QDate::currentDate();
+    savedFormats[today] = calendar->dateTextFormat(today);
+
+    calendar->setDateTextFormat(QDate(), QTextCharFormat()); // очистить всё
+    highlightCurrentDate(); // восстановить формат сегодняшней даты
 
     QTextCharFormat noteFormat;
     if (m_isDarkTheme) {
-        noteFormat.setBackground(QBrush(QColor(Qt::darkGray)));
+        noteFormat.setBackground(QBrush(Qt::darkGray));
         noteFormat.setForeground(QBrush(Qt::black));
     } else {
         noteFormat.setBackground(QBrush(QColor(Qt::lightGray)));
@@ -426,19 +419,22 @@ void MainWindow::highlightDatesWithNotes()
     QSqlQuery query("SELECT DISTINCT date FROM notes");
     while(query.next()){
         QDate date = QDate::fromString(query.value(0).toString(), Qt::ISODate);
-        if(date.isValid())
+        if(date.isValid() && date != today) // не перезаписываем формат сегодняшнего дня
             calendar->setDateTextFormat(date, noteFormat);
     }
 }
 
 void MainWindow::loadNotesForDate(const QDate &date)
 {
-    for (int i = 0; i < list->count(); ++i)
-        list->item(i)->setText(QString("%1:00").arg(i, 2, 10, QChar('0')));
+    for (int i = 0; i < list->count(); ++i) {
+        QListWidgetItem* currentItem = list->item(i);
+        // Сбрасываем текст, сохраняя только час
+        currentItem->setText(QString("%1:00").arg(i, 2, 10, QChar('0')));
+    }
 
     QMap<int, QList<QPair<int, QString>>> notesByHour;
     QSqlQuery query;
-    query.prepare("SELECT hour, minute, note FROM notes WHERE date = ?");
+    query.prepare("SELECT hour, minute, note FROM notes WHERE date = ? ORDER BY minute ASC");
     query.addBindValue(date.toString(Qt::ISODate));
     if (!query.exec()) {
         qWarning() << "Ошибка SQL exec loadNotesForDate:" << query.lastError().text();
@@ -473,30 +469,12 @@ void MainWindow::loadNotesForDate(const QDate &date)
 
 void MainWindow::saveNote(const QDate &date, int hour, int minute, const QString &text)
 {
-    // QSqlQuery query(db);
-    // if (text.trimmed().isEmpty()) {
-    //     query.prepare("DELETE FROM notes WHERE date=? AND hour=? AND minute=?");
-    //     query.addBindValue(date.toString(Qt::ISODate));
-    //     query.addBindValue(hour);
-    //     query.addBindValue(minute);
-    // } else {
-    //     query.prepare("INSERT OR REPLACE INTO notes (date, hour, minute, note) VALUES (?, ?, ?, ?)");
-    //     query.addBindValue(date.toString(Qt::ISODate));
-    //     query.addBindValue(hour);
-    //     query.addBindValue(minute);
-    //     query.addBindValue(text.trimmed());
-    // }
-    // if (!query.exec())
-    //     qWarning() << "Ошибка exec saveNote:" << query.lastError().text();
-
-    // Отправляем на сервер
     QJsonObject noteJson;
     noteJson["date"] = date.toString(Qt::ISODate);
     noteJson["hour"] = hour;
     noteJson["minute"] = minute;
-    // noteJson["note"] = text;
-    noteJson["note"] = text.trimmed(); // Используем trimmed() здесь
-    noteJson["shared_with"] = QJsonArray(); // Посылаем пустой массив, если не используется
+    noteJson["note"] = text.trimmed();
+    noteJson["shared_with"] = QJsonArray(); // пустой массив для совместного использования (если не используется)
 
     int existingId = -1;
     for(auto it = notesCache.begin(); it != notesCache.end(); ++it){
@@ -519,25 +497,21 @@ void MainWindow::deleteNoteById(int id)
 {
     if (id == -1) return;
 
-    QJsonObject noteObj = notesCache.value(id);
-    QSqlQuery query(db);
-    query.prepare("DELETE FROM notes WHERE date=? AND hour=? AND minute=?");
-    query.addBindValue(noteObj.value("date").toString());
-    query.addBindValue(noteObj.value("hour").toInt());
-    query.addBindValue(noteObj.value("minute").toInt());
-    if (!query.exec())
-        qWarning() << "Ошибка exec deleteNote:" << query.lastError().text();
-
     client->deleteNote(id);
 }
 
 void MainWindow::onDateChanged()
 {
-    fillHoursList();
+    loadNotesForDate(calendar->selectedDate());
 }
 
 void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
 {
+    if (m_currentUserRole == "viewer") {
+        QMessageBox::information(this, "Доступ запрещен", "В режиме просмотра нельзя добавлять или изменять заметки.");
+        return; // Выходим, не давая редактировать
+    }
+
     int hour = list->row(item);
     QDate selectedDate = calendar->selectedDate();
 
@@ -572,14 +546,10 @@ void MainWindow::onHourDoubleClicked(QListWidgetItem* item)
     if (!okText)
         return;
 
-    if (text.trimmed().isEmpty())
+    if (text.trimmed().isEmpty() && existingId != -1)
         deleteNoteById(existingId);
-    else
+    else if (!text.trimmed().isEmpty())
         saveNote(selectedDate, hour, minute, text);
-
-    // fillHoursList();
-    // highlightDatesWithNotes();
-    // scheduleNotifications();
 }
 
 void MainWindow::setupTrayIcon()
@@ -683,20 +653,15 @@ void MainWindow::applyDarkTheme()
         QListWidget::item:selected { background-color: #3d4250; color: #ffffff; }
     )");
 
-    highlightCurrentDate();
     highlightDatesWithNotes();
-    fillHoursList();
+    highlightCurrentDate();
+    loadNotesForDate(calendar->selectedDate());
 }
 
 void MainWindow::applyLightTheme()
 {
     m_isDarkTheme = false;
     applyLightPalette(*qApp);
-
-    // Обновляем виджеты
-    highlightCurrentDate();
-    highlightDatesWithNotes();
-    fillHoursList(); // или loadNotesForDate(calendar->selectedDate());
 
     calendar->setStyleSheet(R"(
         QCalendarWidget QWidget { background-color: #ffffff; color: #000000; }
@@ -711,6 +676,10 @@ void MainWindow::applyLightTheme()
         QListWidget::item { background-color: #ffffff; color: #000000; }
         QListWidget::item:selected { background-color: #cce8ff; color: #000000; }
     )");
+
+    highlightDatesWithNotes();
+    highlightCurrentDate();
+    loadNotesForDate(calendar->selectedDate());
 }
 
 void MainWindow::loadSavedTheme()

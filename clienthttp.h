@@ -28,7 +28,7 @@ public:
     void deleteNote(int id);
 
 signals:
-    void loginResult(bool success, const QString &error = QString());
+    void loginResult(bool success, const QString &role, const QString &error = QString());
     void registerResult(bool success, const QString &msg = QString());
     void notesReceived(const QJsonArray &notes);
     void noteAdded(const QJsonObject &note);
@@ -42,6 +42,7 @@ private slots:
 private:
     QString m_serverUrl;
     QString accessToken;
+    QString m_userRole; // Поле для хранения роли
     QNetworkAccessManager* networkManager;
     QHash<QNetworkReply*, QString> pendingRequests;
     QHash<QNetworkReply*, QVariant> pendingData;

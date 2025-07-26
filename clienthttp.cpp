@@ -22,7 +22,7 @@ void ClientHttp::login(const QString &username, const QString &password)
 {
     if (m_serverUrl.isEmpty()) {
         emit errorOccurred("URL сервера не задан");
-        emit loginResult(false, "URL сервера не задан");
+        emit loginResult(false, "", "URL сервера не задан");
         return;
     }
 
@@ -45,15 +45,12 @@ void ClientHttp::registerUser(const QString &username, const QString &password)
         emit registerResult(false, "URL сервера не задан");
         return;
     }
-
     QUrl url(m_serverUrl + "/register");
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
     QJsonObject body;
     body["username"] = username;
     body["password"] = password;
-
     QByteArray postData = QJsonDocument(body).toJson();
     QNetworkReply* reply = networkManager->post(request, postData);
     pendingRequests[reply] = "register";
@@ -65,11 +62,9 @@ void ClientHttp::fetchNotes()
         emit errorOccurred("Не выполнен вход");
         return;
     }
-
     QUrl url(m_serverUrl + "/notes");
     QNetworkRequest request(url);
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
-
     QNetworkReply* reply = networkManager->get(request);
     pendingRequests[reply] = "fetchNotes";
 }
@@ -80,14 +75,11 @@ void ClientHttp::addNote(const QJsonObject &note)
         emit errorOccurred("Не выполнен вход");
         return;
     }
-
     QUrl url(m_serverUrl + "/notes");
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
-
     QByteArray data = QJsonDocument(note).toJson();
-
     QNetworkReply* reply = networkManager->post(request, data);
     pendingRequests[reply] = "addNote";
     pendingData[reply] = note;
@@ -99,14 +91,11 @@ void ClientHttp::updateNote(int id, const QJsonObject &note)
         emit errorOccurred("Не выполнен вход");
         return;
     }
-
     QUrl url(m_serverUrl + "/notes/" + QString::number(id));
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
-
     QByteArray data = QJsonDocument(note).toJson();
-
     QNetworkReply* reply = networkManager->put(request, data);
     pendingRequests[reply] = "updateNote";
     pendingData[reply] = id;
@@ -118,11 +107,9 @@ void ClientHttp::deleteNote(int id)
         emit errorOccurred("Не выполнен вход");
         return;
     }
-
     QUrl url(m_serverUrl + "/notes/" + QString::number(id));
     QNetworkRequest request(url);
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
-
     QNetworkReply* reply = networkManager->deleteResource(request);
     pendingRequests[reply] = "deleteNote";
     pendingData[reply] = id;
@@ -147,7 +134,7 @@ void ClientHttp::onReplyFinished(QNetworkReply* reply)
         emit errorOccurred(err);
 
         if (reqType == "login")
-            emit loginResult(false, err);
+            emit loginResult(false, "", err);
         else if (reqType == "register")
             emit registerResult(false, err);
 
@@ -170,14 +157,17 @@ void ClientHttp::onReplyFinished(QNetworkReply* reply)
         if (json.isObject()) {
             auto obj = json.object();
             QString token = obj.value("access_token").toString();
-            if (!token.isEmpty()) {
+            QString role = obj.value("user_role").toString(); // ИЗВЛЕКАЕМ РОЛЬ
+
+            if (!token.isEmpty() && !role.isEmpty()) {
                 accessToken = token;
-                emit loginResult(true);
+                m_userRole = role; // СОХРАНЯЕМ РОЛЬ
+                emit loginResult(true, m_userRole); // ПЕРЕДАЕМ РОЛЬ
             } else {
-                emit loginResult(false, "Нет токена в ответе");
+                emit loginResult(false, "", "Нет токена или роли в ответе");
             }
         } else {
-            emit loginResult(false, "Некорректный ответ сервера");
+            emit loginResult(false, "", "Некорректный ответ сервера");
         }
     }
     else if (reqType == "fetchNotes") {

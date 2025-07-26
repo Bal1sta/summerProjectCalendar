@@ -10,24 +10,42 @@ qt_standard_project_setup()
 
 qt_add_resources(RESOURCES resources.qrc)
 
-qt_add_executable(summerProject
-    WIN32
+set(SOURCES
     main.cpp
     mainwindow.cpp
-    mainwindow.h
     notesdatabase.cpp
-    notesdatabase.h
-    ${RESOURCES}
-    thememanager.h thememanager.cpp
-    clienthttp.h clienthttp.cpp
-    client.h client.cpp
-    logindialog.h logindialog.cpp
-    registerdialog.h registerdialog.cpp
-
-
-
-
+    thememanager.cpp
+    clienthttp.cpp
+    client.cpp
+    logindialog.cpp
+    registerdialog.cpp
 )
+
+set(HEADERS
+    mainwindow.h
+    notesdatabase.h
+    thememanager.h
+    clienthttp.h
+    client.h
+    logindialog.h
+    registerdialog.h
+)
+
+if(WIN32)
+    qt_add_executable(summerProject WIN32
+        ${SOURCES}
+        ${HEADERS}
+        ${RESOURCES}
+    )
+elseif(UNIX)
+    qt_add_executable(summerProject
+        ${SUORCES}
+        ${HEADERS}
+        ${RESOURCES}
+    )
+else()
+    message(FATAL_ERROR "Unsupported platform")
+endif()
 
 target_link_libraries(summerProject
     PRIVATE
