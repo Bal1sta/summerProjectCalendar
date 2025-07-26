@@ -167,7 +167,7 @@ void MainWindow::showLoginDialog()
 
         if (client->serverUrl().isEmpty()) {
             bool okUrl = false;
-            QString url = QInputDialog::getText(this, "Адрес сервера", "Введите URL вашего сервера:", QLineEdit::Normal, "http://127.0.0.1:8000", &okUrl);
+            QString url = QInputDialog::getText(this, "Адрес сервера", "Введите URL вашего сервера:", QLineEdit::Normal, "http://192.168.8.59:8000", &okUrl);
             if (!okUrl || url.trimmed().isEmpty()) {
                 continue;
             }
@@ -245,10 +245,10 @@ void MainWindow::onNotesReceived(const QJsonArray &notes)
         query.addBindValue(obj.value("minute").toInt());
         query.addBindValue(obj.value("note").toString());
         if (!query.exec()) {
-            // Эта ошибка больше не должна появляться
             qWarning() << "Ошибка вставки заметки в локальную базу:" << query.lastError().text();
         }
     }
+
     db.commit();
 
     highlightDatesWithNotes();
@@ -260,6 +260,7 @@ void MainWindow::onNoteAdded(const QJsonObject &note)
 {
     client->fetchNotes();
 }
+
 
 void MainWindow::onNoteUpdated(const QJsonObject &note)
 {
