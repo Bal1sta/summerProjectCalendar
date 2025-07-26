@@ -39,7 +39,7 @@ if(WIN32)
     )
 elseif(UNIX)
     qt_add_executable(summerProject
-        ${SUORCES}
+        ${SOURCES}
         ${HEADERS}
         ${RESOURCES}
     )

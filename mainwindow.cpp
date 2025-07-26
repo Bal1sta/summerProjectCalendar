@@ -71,8 +71,9 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     QSqlQuery query;
+    // КОРРЕКТНАЯ СХЕМА ЛОКАЛЬНОЙ БАЗЫ ДАННЫХ
     if (!query.exec("CREATE TABLE IF NOT EXISTS notes ("
-                    "id INTEGER PRIMARY KEY,"
+                    "id INTEGER PRIMARY KEY," // БЕЗ AUTOINCREMENT
                     "date TEXT,"
                     "hour INTEGER,"
                     "minute INTEGER,"
@@ -244,6 +245,7 @@ void MainWindow::onNotesReceived(const QJsonArray &notes)
         query.addBindValue(obj.value("minute").toInt());
         query.addBindValue(obj.value("note").toString());
         if (!query.exec()) {
+            // Эта ошибка больше не должна появляться
             qWarning() << "Ошибка вставки заметки в локальную базу:" << query.lastError().text();
         }
     }
