@@ -12,7 +12,7 @@
 #include <QActionGroup>
 #include <QAction>
 
-#include "ClientHttp.h"
+#include "clienthttp.h"
 
 class MainWindow : public QMainWindow
 {
